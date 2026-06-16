@@ -16,9 +16,17 @@ class FakeNumberHook : IXposedHookLoadPackage {
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         val cl = lpparam.classLoader
-        hook("android.telephony.SubscriptionManager", "getPhoneNumber", Fmt.E164, cl, Int::class.javaPrimitiveType!!)
+        val INT = Int::class.javaPrimitiveType!!
+
+        // 표준 공개 경로
+        hook("android.telephony.SubscriptionManager", "getPhoneNumber", Fmt.E164, cl, INT)
         hook("android.telephony.TelephonyManager",    "getLine1Number", Fmt.RAW,  cl)
         hook("android.telephony.SubscriptionInfo",    "getNumber",      Fmt.RAW,  cl)
+
+        // 추가 경로 (직접 호출/hidden 오버로드 — 없는 단말에선 miss로 무시됨)
+        hook("android.telephony.SubscriptionManager", "getPhoneNumber", Fmt.E164, cl, INT, INT)  // (subId, source)
+        hook("android.telephony.TelephonyManager",    "getLine1Number", Fmt.RAW,  cl, INT)        // (subId) hidden
+        hook("android.telephony.TelephonyManager",    "getMsisdn",      Fmt.RAW,  cl)             // hidden
     }
 
     private fun hook(clazz: String, method: String, def: Fmt, cl: ClassLoader, vararg paramTypes: Any) {
