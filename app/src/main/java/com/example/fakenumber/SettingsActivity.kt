@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
@@ -161,20 +162,25 @@ class SettingsActivity : Activity() {
         return row
     }
 
-    /** 설치된 앱 목록 다이얼로그 (아이콘+이름+패키지명) */
+    /** 설치된 앱 목록 다이얼로그 — 사용자 앱 / 시스템 앱 탭으로 구분 */
     private fun showAppPicker() {
         val pm = packageManager
         @Suppress("DEPRECATION")
-        val apps = pm.getInstalledApplications(0)
+        val all = pm.getInstalledApplications(0)
             .sortedBy { pm.getApplicationLabel(it).toString().lowercase() }
+        val systemMask = ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
+        val userApps = all.filter { (it.flags and systemMask) == 0 }
+        val systemApps = all.filter { (it.flags and systemMask) != 0 }
+
+        var shown = userApps   // 기본 탭: 사용자 앱
 
         val listView = ListView(this)
-        listView.adapter = object : BaseAdapter() {
-            override fun getCount() = apps.size
-            override fun getItem(p: Int) = apps[p]
+        val adapter = object : BaseAdapter() {
+            override fun getCount() = shown.size
+            override fun getItem(p: Int) = shown[p]
             override fun getItemId(p: Int) = p.toLong()
             override fun getView(p: Int, convertView: View?, parent: ViewGroup): View {
-                val info = apps[p]
+                val info = shown[p]
                 val v = convertView as? LinearLayout ?: LinearLayout(this@SettingsActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
@@ -196,15 +202,43 @@ class SettingsActivity : Activity() {
                 return v
             }
         }
+        listView.adapter = adapter
+
+        // --- 탭 버튼 (활성 탭은 비활성화 처리로 강조) ---
+        val tabUser = Button(this).apply { text = "사용자 앱 (${userApps.size})" }
+        val tabSystem = Button(this).apply { text = "시스템 앱 (${systemApps.size})" }
+        fun selectTab(user: Boolean) {
+            shown = if (user) userApps else systemApps
+            adapter.notifyDataSetChanged()
+            listView.setSelection(0)
+            tabUser.isEnabled = !user
+            tabSystem.isEnabled = user
+        }
+        tabUser.setOnClickListener { selectTab(true) }
+        tabSystem.setOnClickListener { selectTab(false) }
+
+        val tabRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(tabUser, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(tabSystem, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(tabRow)
+            // ListView는 명시적 높이를 줘야 다이얼로그 안에서 스크롤됨
+            addView(listView, LinearLayout.LayoutParams(
+                MATCH_PARENT, (resources.displayMetrics.heightPixels * 0.6).toInt()))
+        }
+        selectTab(true)   // 초기 상태 반영
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("앱 선택")
-            .setView(listView)
+            .setView(container)
             .setNegativeButton("취소", null)
             .create()
 
         listView.setOnItemClickListener { _, _, position, _ ->
-            val info = apps[position]
+            val info = shown[position]
             dialog.dismiss()
             showNumberDialog(info.packageName, info.loadLabel(pm).toString())
         }
