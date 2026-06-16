@@ -15,24 +15,25 @@ class FakeNumberHook : IXposedHookLoadPackage {
     private enum class Fmt { RAW, DASHED, E164, E164_NOPLUS }
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
+        val pkg = lpparam.packageName
         val cl = lpparam.classLoader
         val INT = Int::class.javaPrimitiveType!!
 
         // 표준 공개 경로
-        hook("android.telephony.SubscriptionManager", "getPhoneNumber", Fmt.E164, cl, INT)
-        hook("android.telephony.TelephonyManager",    "getLine1Number", Fmt.RAW,  cl)
-        hook("android.telephony.SubscriptionInfo",    "getNumber",      Fmt.RAW,  cl)
+        hook(pkg, "android.telephony.SubscriptionManager", "getPhoneNumber", Fmt.E164, cl, INT)
+        hook(pkg, "android.telephony.TelephonyManager",    "getLine1Number", Fmt.RAW,  cl)
+        hook(pkg, "android.telephony.SubscriptionInfo",    "getNumber",      Fmt.RAW,  cl)
 
         // 추가 경로 (직접 호출/hidden 오버로드 — 없는 단말에선 miss로 무시됨)
-        hook("android.telephony.SubscriptionManager", "getPhoneNumber", Fmt.E164, cl, INT, INT)  // (subId, source)
-        hook("android.telephony.TelephonyManager",    "getLine1Number", Fmt.RAW,  cl, INT)        // (subId) hidden
-        hook("android.telephony.TelephonyManager",    "getMsisdn",      Fmt.RAW,  cl)             // hidden
+        hook(pkg, "android.telephony.SubscriptionManager", "getPhoneNumber", Fmt.E164, cl, INT, INT)  // (subId, source)
+        hook(pkg, "android.telephony.TelephonyManager",    "getLine1Number", Fmt.RAW,  cl, INT)        // (subId) hidden
+        hook(pkg, "android.telephony.TelephonyManager",    "getMsisdn",      Fmt.RAW,  cl)             // hidden
     }
 
-    private fun hook(clazz: String, method: String, def: Fmt, cl: ClassLoader, vararg paramTypes: Any) {
+    private fun hook(pkg: String, clazz: String, method: String, def: Fmt, cl: ClassLoader, vararg paramTypes: Any) {
         val params = arrayOf(*paramTypes, object : XC_MethodHook() {
             override fun afterHookedMethod(p: MethodHookParam) {
-                val nsn = currentNsn() ?: return            // 미설정이면 원본 통과
+                val nsn = currentNsn(pkg) ?: return         // 미설정이면 원본 통과
                 val f = detect(p.result as? String) ?: def
                 p.result = render(f, nsn)
             }
@@ -44,9 +45,11 @@ class FakeNumberHook : IXposedHookLoadPackage {
         }
     }
 
-    private fun currentNsn(): String? {
+    private fun currentNsn(pkg: String): String? {
         prefs.reload()                                      // 매 호출 최신값
-        var s = prefs.getString(Const.KEY_NUMBER, "")?.trim().orEmpty()
+        // 앱별 번호 우선, 없으면 기본 번호 폴백
+        var s = (prefs.getString(Const.KEY_APP_PREFIX + pkg, null)
+            ?: prefs.getString(Const.KEY_NUMBER, ""))?.trim().orEmpty()
         if (s.isEmpty()) return null
         s = s.replace("-", "").replace(" ", "")
         if (s.startsWith("+")) s = s.substring(1)
