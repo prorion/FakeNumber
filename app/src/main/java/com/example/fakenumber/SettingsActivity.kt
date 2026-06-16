@@ -44,6 +44,8 @@ class SettingsActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            // 진입 시 EditText가 포커스를 가로채 키보드가 뜨고 화면이 밀리는 것 방지
+            isFocusableInTouchMode = true
             setPadding(dp(20), dp(24), dp(20), dp(24))
         }
 

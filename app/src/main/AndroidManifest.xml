@@ -24,6 +24,7 @@
         <activity
             android:name=".SettingsActivity"
             android:exported="true"
+            android:windowSoftInputMode="stateHidden|adjustResize"
             android:theme="@android:style/Theme.DeviceDefault.Light">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
