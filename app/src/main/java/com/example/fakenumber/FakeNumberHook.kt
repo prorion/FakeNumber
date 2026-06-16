@@ -47,9 +47,10 @@ class FakeNumberHook : IXposedHookLoadPackage {
 
     private fun currentNsn(pkg: String): String? {
         prefs.reload()                                      // 매 호출 최신값
-        // 앱별 번호 우선, 없으면 기본 번호 폴백
-        var s = (prefs.getString(Const.KEY_APP_PREFIX + pkg, null)
-            ?: prefs.getString(Const.KEY_NUMBER, ""))?.trim().orEmpty()
+        // 앱별 번호 우선(null·공백이면 기본 번호 폴백)
+        val perApp = prefs.getString(Const.KEY_APP_PREFIX + pkg, null)
+        val raw = if (!perApp.isNullOrBlank()) perApp else prefs.getString(Const.KEY_NUMBER, "")
+        var s = raw?.trim().orEmpty()
         if (s.isEmpty()) return null
         s = s.replace("-", "").replace(" ", "")
         if (s.startsWith("+")) s = s.substring(1)

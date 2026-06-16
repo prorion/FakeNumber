@@ -27,21 +27,33 @@ class SettingsActivity : Activity() {
 
     private lateinit var prefs: SharedPreferences
     private lateinit var listContainer: LinearLayout   // 앱별 행이 들어가는 컨테이너
+    private var moduleActive = false                    // WORLD_READABLE 획득 = 모듈 ON
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         prefs = try {
             @Suppress("DEPRECATION")
-            getSharedPreferences(Const.PREF_NAME, Context.MODE_WORLD_READABLE)
+            val p = getSharedPreferences(Const.PREF_NAME, Context.MODE_WORLD_READABLE)
+            moduleActive = true
+            p
         } catch (e: SecurityException) {
-            // 모듈 비활성 상태면 폴백 → 후킹쪽이 못 읽으니 모듈 ON 후 재저장 필요
+            // 모듈 비활성 → 여기 쓰면 후킹쪽이 못 읽음. 표시용으로만 열고 저장은 막는다.
             getSharedPreferences(Const.PREF_NAME, Context.MODE_PRIVATE)
         }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(24), dp(20), dp(24))
+        }
+
+        // --- 모듈 비활성 경고 ---
+        if (!moduleActive) {
+            root.addView(TextView(this).apply {
+                text = "⚠ 모듈이 비활성 상태입니다.\nLSPosed에서 FakeNumber를 켠 뒤 이 앱을 다시 열어야 저장됩니다."
+                setTextColor(Color.RED)
+                setPadding(dp(12), dp(12), dp(12), dp(12))
+            }, rowParams())
         }
 
         // --- 기본 번호 ---
@@ -55,6 +67,7 @@ class SettingsActivity : Activity() {
         root.addView(Button(this).apply {
             text = "기본 번호 저장"
             setOnClickListener {
+                if (!guardSave()) return@setOnClickListener
                 prefs.edit().putString(Const.KEY_NUMBER, defaultInput.text.toString().trim()).apply()
                 toast("기본 번호 저장됨")
             }
@@ -138,6 +151,7 @@ class SettingsActivity : Activity() {
         row.addView(Button(this).apply {
             text = "삭제"
             setOnClickListener {
+                if (!guardSave()) return@setOnClickListener
                 prefs.edit().remove(Const.KEY_APP_PREFIX + pkg).apply()
                 refreshList()
             }
@@ -207,6 +221,7 @@ class SettingsActivity : Activity() {
             .setMessage(pkg)
             .setView(input)
             .setPositiveButton("저장") { _, _ ->
+                if (!guardSave()) return@setPositiveButton
                 val v = input.text.toString().trim()
                 val e = prefs.edit()
                 if (v.isEmpty()) e.remove(Const.KEY_APP_PREFIX + pkg)   // 빈 값 = 개별 설정 해제
@@ -220,6 +235,15 @@ class SettingsActivity : Activity() {
     }
 
     // --- helpers ---
+    /** 모듈이 비활성이면 저장을 막고 안내 (PRIVATE 폴백에 몰래 쓰는 것 방지) */
+    private fun guardSave(): Boolean {
+        if (!moduleActive) {
+            toast("모듈이 비활성 상태입니다. LSPosed에서 모듈을 켠 뒤 앱을 다시 열어 저장하세요.")
+            return false
+        }
+        return true
+    }
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun rowParams() = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
     private fun label(t: String) = TextView(this).apply { text = t; textSize = 14f }
