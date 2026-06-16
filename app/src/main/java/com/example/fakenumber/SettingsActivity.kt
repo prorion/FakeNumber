@@ -7,11 +7,13 @@ import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.BaseAdapter
@@ -95,7 +97,21 @@ class SettingsActivity : Activity() {
         listContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(listContainer, rowParams())
 
-        setContentView(ScrollView(this).apply { addView(root) })
+        val scroll = ScrollView(this).apply {
+            addView(root)
+            isFillViewport = true
+        }
+        // Android 15(API35)+ 엣지투엣지: 상태바/내비바에 콘텐츠가 가려지지 않도록 인셋만큼 패딩
+        if (Build.VERSION.SDK_INT >= 30) {
+            scroll.setOnApplyWindowInsetsListener { v, insets ->
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                v.setPadding(0, bars.top, 0, bars.bottom)
+                insets
+            }
+        }
+        setContentView(scroll)
+        // 진입 시 맨 위로 (자동 포커스/스크롤로 상단이 밀리는 것 방지)
+        scroll.post { scroll.scrollTo(0, 0) }
         refreshList()
     }
 
